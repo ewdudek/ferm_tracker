@@ -92,8 +92,7 @@ def readAmbientSensor():
         humidity, ambtemp = Adafruit_DHT.read_retry(sensor, gpio_pin)
         if ambtemp is None:
             print("First temp probe failed, wait 2s then try again...")
-            #sensor has weird issues with checking the temp within 2s, so do max delay
-            time.sleep(2)
+            time.sleep(1)
             humidity, ambtemp = Adafruit_DHT.read_retry(sensor, gpio_pin)
             if ambtemp is None:
                 ambtemp = -1
@@ -130,13 +129,14 @@ def monitor_tilt():
         drawDataPoint(color, gravity, fermtemp, ambtemp, update_diff)
         prev_timestamp = timestamp
         time.sleep(10)
+        
 
 if __name__ == '__main__':
     dev_id = 0
     try:
-        print('Starting Fermentation Tracking...')
+        print("Starting Fermentation Tracking...")
     except:
-        print('Error accessing bluetooth device...')
+        print("Error accessing bluetooth device...")
         sys.exit(1)
 
     monitor_tilt()

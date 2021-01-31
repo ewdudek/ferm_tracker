@@ -113,6 +113,7 @@ def parse_events(sock, loop_count=100):
                 report_pkt_offset = 0
                 for i in range(0, num_reports):
                     uuid = returnstringpacket(pkt[report_pkt_offset - 22: report_pkt_offset - 6])
+                    #if one of the beacons matches known tilt keys (only purple matters)
                     if uuid in TILTS.keys():
                         beacons.append({
                             'uuid': uuid,
