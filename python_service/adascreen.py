@@ -1,3 +1,5 @@
+# Based on https://learn.adafruit.com/adafruit-pioled-128x32-mini-oled-for-raspberry-pi/usage
+
 from board import SCL, SDA
 import busio
 import adafruit_ssd1306
@@ -41,6 +43,5 @@ def drawDataPoint(color, gravity, fermtemp, ambtemp, timediff):
         # Display image.
         disp.image(image)
         disp.show()
-        #time.sleep(0.1)
     except:
         print("Failed to update LCD at " + datetime.datetime.now().isoformat())
