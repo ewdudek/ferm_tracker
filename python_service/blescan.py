@@ -1,6 +1,9 @@
-# based on https://github.com/switchdoclabs/iBeacon-Scanner-
+# based on https://github.com/atlefren/pytilt/blob/master/blescan.py
 
-#Trim down by removing unused code
+# TODO
+# Trim down by removing unused code
+# Investigate performance
+# Allow for multiple tilts
 
 import os
 import sys
@@ -32,15 +35,16 @@ ADV_SCAN_IND = 0x02
 ADV_NONCONN_IND = 0x03
 ADV_SCAN_RSP = 0x04
 
+# Only look for the purple uuid
 TILTS = {
 		'a495bb40c5b14b44b5121370f02d74de': 'Purple',
-        'a495bb10c5b14b44b5121370f02d74de': 'Red',
-        'a495bb20c5b14b44b5121370f02d74de': 'Green',
-        'a495bb30c5b14b44b5121370f02d74de': 'Black',
-        'a495bb50c5b14b44b5121370f02d74de': 'Orange',
-        'a495bb60c5b14b44b5121370f02d74de': 'Blue',
-        'a495bb70c5b14b44b5121370f02d74de': 'Yellow',
-        'a495bb80c5b14b44b5121370f02d74de': 'Pink',
+        #'a495bb10c5b14b44b5121370f02d74de': 'Red',
+        #'a495bb20c5b14b44b5121370f02d74de': 'Green',
+        #'a495bb30c5b14b44b5121370f02d74de': 'Black',
+        #'a495bb50c5b14b44b5121370f02d74de': 'Orange',
+        #'a495bb60c5b14b44b5121370f02d74de': 'Blue',
+        #'a495bb70c5b14b44b5121370f02d74de': 'Yellow',
+        #'a495bb80c5b14b44b5121370f02d74de': 'Pink',
 }
 
 def returnnumberpacket(pkt):
@@ -57,21 +61,6 @@ def returnstringpacket(pkt):
     for c in pkt:
         ret += "%x" % c
     return ret
-
-def printpacket(pkt):
-    for c in pkt:
-        sys.stdout.write('%02x ' % struct.unpack('B', c)[0])
-
-def get_packed_bdaddr(bdaddr_string):
-    packable_addr = []
-    addr = bdaddr_string.split(':')
-    addr.reverse()
-    for b in addr:
-        packable_addr.append(int(b, 16))
-    return struct.pack('<BBBBBB', *packable_addr)
-
-def packed_bdaddr_to_string(bdaddr_packed):
-    return ':'.join('%02x' % i for i in struct.unpack("<BBBBBB", bdaddr_packed[::-1]))
 
 def hci_enable_le_scan(sock):
     hci_toggle_le_scan(sock, 0x01)
@@ -113,13 +102,19 @@ def parse_events(sock, loop_count=100):
                 report_pkt_offset = 0
                 for i in range(0, num_reports):
                     uuid = returnstringpacket(pkt[report_pkt_offset - 22: report_pkt_offset - 6])
+                    #if one of the beacons matches known tilt keys (only purple matters)
                     if uuid in TILTS.keys():
                         beacons.append({
-                            'uuid': uuid,
-                            'minor': returnnumberpacket(pkt[report_pkt_offset - 4: report_pkt_offset - 2]),
-                            'major': returnnumberpacket(pkt[report_pkt_offset - 6: report_pkt_offset - 4])
+                            'color': TILTS.get(uuid),
+                            'grav': returnnumberpacket(pkt[report_pkt_offset - 4: report_pkt_offset - 2])/1000,
+                            'temp': returnnumberpacket(pkt[report_pkt_offset - 6: report_pkt_offset - 4])
                         })
-                    
-                done = True
+                        #I only have 1 tilt for now, so just break and return the valid datapoint
+                        break
+                done = True #WHAT IS THIS????
+        # Quit scanning after the first hit
+        if len(beacons) > 0 :
+            break
+            
     sock.setsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, old_filter)
     return beacons
