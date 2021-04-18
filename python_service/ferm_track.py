@@ -11,16 +11,25 @@ import datetime
 import time
 import threading
 import subprocess
+import json
 import bluetooth._bluetooth as bluez
 import blescan
 import Adafruit_DHT
 import adascreen
+from copy import copy
+#from azure.servicebus import ServiceBusClient, ServiceBusMessage
+
+#lol hardcoded
+#CONNECTION_STR = 
+#QUEUE_NAME = "brewing-update"
 
 # DHT Sensor Type
-sensor = Adafruit_DHT.AM2302 # Same as DHT22, no?
+sensor = Adafruit_DHT.DHT22
 gpio_pin = 26 # I think this is GPIO pin not literal pin #
 
-# I feel like I just wrote a java class in python
+#aggregation stuff
+dpList = []
+
 class FermPoint:
     def __init__(self):
         self.fermTemp = -1
@@ -29,16 +38,30 @@ class FermPoint:
         self.gravity = -1
         self.humidity = -1
         self.timestamp = datetime.datetime.now()
-        self._lock = threading.Lock()
+        #self._lock = threading.Lock()
+    
+    def __copy__(self):
+        cls = self.__class__
+        retcpy = cls.__new__(cls)
+        retcpy.__dict__.update(self.__dict__)
+        return retcpy
     
     def updateFermPoint(self, newColor, newFermTemp, newAmbTemp, newGravity, newHumidity, newTimestamp):
-        with self._lock:
-            self.color = newColor
-            self.fermTemp = newFermTemp
-            self.ambTemp = newAmbTemp
-            self.gravity = newGravity
-            self.humidity = newHumidity
-            self.timestamp = newTimestamp
+        #with self._lock:
+        self.color = newColor
+        self.fermTemp = newFermTemp
+        self.ambTemp = newAmbTemp
+        self.gravity = newGravity
+        self.humidity = newHumidity
+        self.timestamp = newTimestamp
+    
+    def _tryJSON(self, o):
+        try:
+            return o.__dict__
+        except:
+            return str(o)
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: self._tryJSON(o), sort_keys=True, indent=4)
     
     def getColor(self):
         return self.color
@@ -57,7 +80,7 @@ def ScreenLoop(fermdp):
     while True:
         update_diff = (datetime.datetime.now() - fermdp.getTimestamp()).seconds
         adascreen.drawDataPoint(fermdp.getColor(), fermdp.getGravity(), fermdp.getFermTemp(), fermdp.getAmbTemp(), update_diff)
-        time.sleep(0.25)
+        time.sleep(0.5)
     
 def readAmbientSensor():
     humidity = -1
@@ -70,6 +93,9 @@ def readAmbientSensor():
         # Its either None or a Celsius temp
         if ambtemp is not None and ambtemp > -1:
             ambtemp = (ambtemp*(9/5))+32
+        else :
+            ambtemp = -1
+            humidity = -1
     except:
         humidity = -1
         ambtemp = -1
@@ -77,24 +103,53 @@ def readAmbientSensor():
     
     return humidity, ambtemp
     
+def aggregateFermDPs(fermdp):
+    dpList.append(copy(fermdp))
+    time_diff = (fermdp.getTimestamp() - dpList[0].getTimestamp()).seconds
+    print("Time diff: " + str(time_diff))
+    #Enough time has passed, aggregate all the datapoints and record it
+    if time_diff > 20: #Update this for real value aggregation
+        gravity = 0
+        fTemp = 0
+        aTemp = 0
+        humidity = 0
+        for dp in dpList:
+            gravity += dp.getGravity()
+            fTemp += dp.getFermTemp()
+            aTemp += dp.getAmbTemp()
+            humidity += dp.getHumidity()
+        gravity = gravity / len(dpList)
+        fTemp = fTemp / len(dpList)
+        aTemp = aTemp / len(dpList)
+        humidity = humidity / len(dpList)
+        print("Aggregated Data Point...")
+        print("T = " + str(fermdp.getTimestamp()))
+        print("G = " + "{:4.3f}".format(gravity))
+        print("F = " + "{:3.1f}".format(fTemp))
+        print("A = " + "{:3.1f}".format(aTemp))
+        dpList.clear()
+    
 def monitor_tilt():
+    #sender = servicebus_client.get_queue_sender(queue_name=QUEUE_NAME)
     # default printing values of -1
     fermdp = FermPoint()
     # We're just sharing a single object...obviously this will have to change
     screenThread = threading.Thread(target=ScreenLoop, args=(fermdp,))
     screenThread.start()
-    i=1
+    #with sender:
     while True:
         # this parameter is 100 "scans", however it returns the first
         # valid uuid (color) that it finds, which is usually VERY quick
         beacons = blescan.parse_events(sock, 100)
         for beacon in beacons:
             #get ambient
-            #humidity, ambtemp = readAmbientSensor()
-            fermdp.updateFermPoint(beacon['color'], beacon['temp'], -1, beacon['grav'], -1, datetime.datetime.now())
+            humidity, ambtemp = readAmbientSensor()
+            fermdp.updateFermPoint(beacon['color'], beacon['temp'], ambtemp, beacon['grav'], humidity, datetime.datetime.now())
             #publish
-        
-        time.sleep(5) #for now just get an update every ~5s
+            #print(fermdp.toJSON())
+            aggregateFermDPs(fermdp)
+            #sender.send_messages(ServiceBusMessage(fermdp.toJSON()))
+        time.sleep(2) #for now just get an update every ~5s
 
 if __name__ == '__main__':
     dev_id = 0
@@ -107,5 +162,7 @@ if __name__ == '__main__':
 
     blescan.hci_le_set_scan_parameters(sock)
     blescan.hci_enable_le_scan(sock)
+    #servicebus_client = ServiceBusClient.from_connection_string(conn_str=CONNECTION_STR, logging_enable=True)
+    #with servicebus_client: #tab the monitor_tilt if using sb
     monitor_tilt()
     
