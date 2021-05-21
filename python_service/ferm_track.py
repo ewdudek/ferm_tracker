@@ -17,6 +17,7 @@ import blescan
 import Adafruit_DHT
 import adascreen
 import fermdatapoint
+import requests
 from copy import copy
 #from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
@@ -30,6 +31,9 @@ gpio_pin = 26 # I think this is GPIO pin not literal pin #
 
 #aggregation stuff
 dpList = []
+
+CURRENT_BEER_NAME = "TestBeer1"
+SHEETS_SCRIPT = "<insert here>"
 
 def ScreenLoop(fermdp):
     while True:
@@ -82,6 +86,17 @@ def aggregateFermDPs(fermdp):
         print("G = " + "{:4.3f}".format(gravity))
         print("F = " + "{:3.1f}".format(fTemp))
         print("A = " + "{:3.1f}".format(aTemp))
+        senddata = {
+            'Time': fermdp.getTimestamp(),
+            'SG': "{:4.3f}".format(gravity),
+            'Temp': "{:3.1f}".format(fTemp),
+            'Color': "Purple",
+            'Beer': CURRENT_BEER_NAME,
+            'Comment': "{:3.1f}".format(aTemp)
+            }
+        r = requests.post(SHEETS_SCRIPT, senddata)
+        print(r) #???
+        dpList.clear()
         dpList.clear()
     
 def monitor_tilt():
